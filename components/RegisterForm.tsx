@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import FaceCapture from './FaceCapture';
+import FaceScanner from './FaceScanner';
 
 export default function RegisterForm() {
   const router = useRouter();
@@ -181,13 +181,13 @@ export default function RegisterForm() {
       </div>
 
       {showFaceCapture && (
-        <FaceCapture
-          onCapture={(descriptor, image) => {
+        <FaceScanner
+          onCapture={(descriptor: string, image: string) => {
             setFaceData({ descriptor, image });
             setShowFaceCapture(false);
           }}
           onCancel={() => setShowFaceCapture(false)}
-          title="Capture Your Face for Time-In"
+          title="Scan Your Face"
         />
       )}
     </div>
