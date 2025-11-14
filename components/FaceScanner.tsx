@@ -35,16 +35,13 @@ export default function FaceScanner({
         
         setStatus('initializing');
         setError('');
-        setShowCameraCheck(true);
 
         console.log('📷 Requesting camera access...');
 
-        // Better mobile camera constraints
+        // Simple, reliable camera constraints for mobile
         const constraints: MediaStreamConstraints = {
           video: {
             facingMode: 'user',
-            width: { ideal: 1280, min: 640 },
-            height: { ideal: 720, min: 480 },
           },
           audio: false,
         };
@@ -52,17 +49,16 @@ export default function FaceScanner({
         try {
           stream = await navigator.mediaDevices.getUserMedia(constraints);
         } catch (err: any) {
-          // Fallback for older mobile browsers
-          console.log('Trying fallback camera constraints...');
+          console.log('First attempt failed, trying fallback...');
           stream = await navigator.mediaDevices.getUserMedia({
             video: true,
             audio: false,
           });
         }
 
-        if (!mounted) return;
+        if (!mounted || !stream) return;
 
-        if (videoRef.current && stream) {
+        if (videoRef.current) {
           console.log('📹 Stream obtained, attaching to video element...');
           
           videoRef.current.srcObject = stream;
@@ -70,50 +66,19 @@ export default function FaceScanner({
           videoRef.current.setAttribute('webkit-playsinline', 'true');
           videoRef.current.muted = true;
 
-          let readyCheck = 0;
-          const readyInterval = setInterval(() => {
-            readyCheck++;
-            
-            if (videoRef.current && stream) {
-              const videoTrack = stream.getVideoTracks()[0];
+          // Simple timeout - just wait 1.5 seconds then proceed
+          setTimeout(() => {
+            if (mounted) {
+              console.log('✅ Camera ready');
+              setCameraConfirmed(true);
+              setStatus('ready');
               
-              if (
-                videoTrack &&
-                videoTrack.readyState === 'live' &&
-                videoRef.current.readyState >= 2
-              ) {
-                console.log(
-                  `✅ Camera ready: ${videoRef.current.videoWidth}x${videoRef.current.videoHeight}`
-                );
-                clearInterval(readyInterval);
-                
-                if (mounted) {
-                  setCameraConfirmed(true);
-                  
-                  // Auto-play video
-                  videoRef.current.play().catch(err => {
-                    console.error('Auto-play failed:', err);
-                  });
-                  
-                  setStatus('ready');
-                }
-              } else if (readyCheck > 20) {
-                // Timeout after 2 seconds, set ready anyway
-                console.log('⚠️ Camera check timeout, proceeding anyway...');
-                clearInterval(readyInterval);
-                if (mounted) {
-                  setCameraConfirmed(true);
-                  setStatus('ready');
-                  
-                  videoRef.current?.play().catch(err => {
-                    console.error('Play error:', err);
-                  });
-                }
-              }
+              // Try to play
+              videoRef.current?.play().catch(err => {
+                console.error('Play error:', err);
+              });
             }
-          }, 100);
-
-          return () => clearInterval(readyInterval);
+          }, 1500);
         }
       } catch (err: any) {
         console.error('❌ Camera error:', err);
@@ -134,12 +99,11 @@ export default function FaceScanner({
         
         setError(errorMsg);
         setStatus('error');
-        setShowCameraCheck(false);
       }
     };
 
-    // Add a small delay to ensure DOM is ready
-    const startTimer = setTimeout(startScanning, 500);
+    // Small delay to ensure DOM is ready
+    const startTimer = setTimeout(startScanning, 300);
 
     return () => {
       mounted = false;
@@ -235,28 +199,6 @@ export default function FaceScanner({
               <div className="animate-spin rounded-full h-12 w-12 border-2 border-blue-500 border-t-transparent"></div>
             </div>
             <p className="text-blue-300 text-sm text-center">Loading camera...</p>
-          </div>
-        )}
-
-        {showCameraCheck && status === 'initializing' && (
-          <div className="space-y-4">
-            <div className="bg-blue-500/20 border border-blue-500 rounded-lg p-4">
-              <p className="text-blue-200 text-sm">
-                {cameraConfirmed ? (
-                  <>
-                    <span className="font-semibold">✅ Camera is ready!</span>
-                    <br />
-                    Your camera has been verified and is ready to scan.
-                  </>
-                ) : (
-                  <>
-                    <span className="font-semibold">Checking camera...</span>
-                    <br />
-                    Verifying that your camera is working properly.
-                  </>
-                )}
-              </p>
-            </div>
           </div>
         )}
 
