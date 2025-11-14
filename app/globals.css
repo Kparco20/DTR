@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    @apply bg-[#0f1724] text-[#e6eef8];
+  }
+
+  body {
+    @apply bg-gradient-to-b from-[#0f1724] to-[#071026] font-sans min-h-screen;
+  }
+
+  input[type='time'],
+  input[type='text'],
+  input[type='date'] {
+    @apply bg-[#1e293b] border border-[#334155] text-white rounded-md px-1 py-1 text-sm w-32;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-[#0b1220] p-4 rounded-xl shadow-lg;
+  }
+
+  .button {
+    @apply px-4 py-2 rounded-lg font-semibold text-sm text-white border-0 cursor-pointer transition-colors;
+  }
+
+  .button-timein {
+    @apply button bg-green-500 hover:bg-green-600;
+  }
+
+  .button-timeout {
+    @apply button bg-red-500 hover:bg-red-600;
+  }
+
+  .button-submit {
+    @apply button bg-blue-500 hover:bg-blue-600;
+  }
+
+  .button-edit {
+    @apply button bg-amber-400 hover:bg-amber-500 text-black;
+  }
+
+  .button-delete {
+    @apply button bg-red-500 hover:bg-red-600;
+  }
+
+  .entry {
+    @apply bg-white/[0.03] rounded-lg p-2.5 mb-2 flex justify-between items-center;
+  }
+
+  .entry-meta {
+    @apply text-sm;
+  }
+
+  .text-muted {
+    @apply text-[#94a3b8] text-xs;
+  }
+
+  .text-reason {
+    @apply text-yellow-400 text-xs mt-1;
+  }
+}

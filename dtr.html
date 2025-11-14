@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Daily Time-In Report</title>
+  <style>
+    :root {
+      --bg:#0f1724;
+      --card:#0b1220;
+      --accent:#60a5fa;
+      --muted:#94a3b8;
+    }
+    *{box-sizing:border-box;}
+    body{
+      margin:0; font-family:Inter, system-ui, sans-serif;
+      background:linear-gradient(180deg,var(--bg),#071026);
+      color:#e6eef8; padding:20px; min-height:100vh;
+      display:flex; justify-content:center; align-items:flex-start;
+    }
+    .wrap{width:100%; max-width:760px;}
+    header{margin-bottom:18px;}
+    h1{font-size:22px; margin:0;}
+    p.lead{margin:0; color:var(--muted); font-size:13px;}
+    .card{
+      background:var(--card);
+      padding:14px; border-radius:12px;
+      box-shadow:0 6px 20px rgba(2,6,23,0.6);
+    }
+    .controls{display:flex; gap:8px; justify-content:center; margin-bottom:12px;}
+    button{
+      padding:10px 14px; border-radius:10px;
+      border:0; cursor:pointer; font-weight:600; font-size:14px; color:white;
+    }
+    .timein{background:#22c55e;}
+    .timeout{background:#ef4444;}
+    .submit{background:#3b82f6;}
+    .list{margin-top:16px;}
+    .entry{
+      background:rgba(255,255,255,0.03);
+      border-radius:10px; padding:10px;
+      margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;
+    }
+    .meta{font-size:13px;}
+    .muted{color:var(--muted); font-size:12px;}
+    .reason{color:#facc15; font-size:12.5px; margin-top:4px;}
+    .actions{display:flex; gap:6px;}
+    .edit{background:#fbbf24;}
+    .delete{background:#ef4444;}
+    input[type="time"], input[type="text"], input[type="date"]{
+      background:#1e293b; border:1px solid #334155; color:white;
+      border-radius:6px; padding:4px; font-size:13px; width:130px;
+    }
+    #totalOvertime{
+      margin-top:10px; font-size:16px; font-weight:700;
+      color:#60a5fa; background:rgba(96,165,250,0.1);
+      padding:10px; border-radius:10px; text-align:center;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Daily Time-In Report</h1>
+      <p class="lead">Click Time In, Time Out, and Submit to record your work hours.</p>
+    </header>
+
+    <section class="card">
+      <div class="controls">
+        <button id="timeInBtn" class="timein">🟢 Time In</button>
+        <button id="timeOutBtn" class="timeout">🔴 Time Out</button>
+        <button id="submitBtn" class="submit">📋 Submit</button>
+      </div>
+
+      <div class="list" id="list"></div>
+      <div id="totalOvertime">Total Overtime: 0 hrs</div>
+    </section>
+  </div>
+
+  <script>
+    const LS_KEY = 'daily_timein_entries_v7';
+    let entries = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
+    let currentTimeIn = null;
+    let currentTimeOut = null;
+
+    const listEl = document.getElementById('list');
+    const totalOvertimeEl = document.getElementById('totalOvertime');
+
+    function save() {
+      localStorage.setItem(LS_KEY, JSON.stringify(entries));
+      render();
+    }
+
+    function formatTime(date) {
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function calculateHours(start, end) {
+      return (end - start) / (1000 * 60 * 60);
+    }
+
+    function calculateOvertime(hours) {
+      return hours > 9 ? hours - 9 : 0;
+    }
+
+    function render() {
+      listEl.innerHTML = '';
+
+      if (entries.length === 0) {
+        listEl.innerHTML = '<div class="muted">No entries yet — click Submit to record.</div>';
+        totalOvertimeEl.textContent = 'Total Overtime: 0 hrs';
+        return;
+      }
+
+      entries.forEach((entry, i) => {
+        const row = document.createElement('div');
+        row.className = 'entry';
+
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+
+        if (entry.isEditing) {
+          meta.innerHTML = `
+            <div>
+              <input type="date" id="editDate${i}" value="${entry.rawDate || formatDateForInput(entry.date)}">
+            </div>
+            <div>
+              <input type="time" id="editIn${i}" value="${convertTimeToInput(entry.timeIn)}">
+              →
+              <input type="time" id="editOut${i}" value="${convertTimeToInput(entry.timeOut)}">
+            </div>
+            <div>
+              <input type="text" id="editReason${i}" placeholder="Reason (optional)" value="${entry.reason || ''}">
+            </div>
+          `;
+        } else {
+          meta.innerHTML = `
+            <div>${entry.day} (${entry.date})</div>
+            <div>${entry.timeIn} → ${entry.timeOut}</div>
+            <div class="muted">Worked: ${entry.totalHours.toFixed(2)} hrs ${
+              entry.overtime > 0 ? `| OT: ${entry.overtime.toFixed(2)} hrs` : ''
+            }</div>
+            ${entry.reason ? `<div class="reason">🕒 Reason: ${entry.reason}</div>` : ''}
+          `;
+        }
+
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+
+        if (entry.isEditing) {
+          const saveBtn = document.createElement('button');
+          saveBtn.textContent = '💾 Save';
+          saveBtn.className = 'submit';
+          saveBtn.onclick = () => {
+            const newDate = document.getElementById(`editDate${i}`).value;
+            const newIn = document.getElementById(`editIn${i}`).value;
+            const newOut = document.getElementById(`editOut${i}`).value;
+            const newReason = document.getElementById(`editReason${i}`).value;
+
+            if (!newDate || !newIn || !newOut) return alert('Date, Time In, and Time Out are required!');
+            const start = new Date(`2000-01-01T${newIn}`);
+            const end = new Date(`2000-01-01T${newOut}`);
+            const totalHours = calculateHours(start, end);
+            const overtime = calculateOvertime(totalHours);
+
+            entry.date = new Date(newDate).toLocaleDateString();
+            entry.rawDate = newDate;
+            entry.day = new Date(newDate).toLocaleDateString(undefined, { weekday: 'long' });
+            entry.timeIn = formatTime(start);
+            entry.timeOut = formatTime(end);
+            entry.totalHours = totalHours;
+            entry.overtime = overtime;
+            entry.reason = newReason;
+            delete entry.isEditing;
+            save();
+          };
+          actions.appendChild(saveBtn);
+        } else {
+          const editBtn = document.createElement('button');
+          editBtn.textContent = '✏️ Edit';
+          editBtn.className = 'edit';
+          editBtn.onclick = () => { entry.isEditing = true; save(); };
+
+          const delBtn = document.createElement('button');
+          delBtn.textContent = '🗑️ Delete';
+          delBtn.className = 'delete';
+          delBtn.onclick = () => {
+            if (confirm('Delete this record?')) {
+              entries.splice(i, 1);
+              save();
+            }
+          };
+
+          actions.appendChild(editBtn);
+          actions.appendChild(delBtn);
+        }
+
+        row.appendChild(meta);
+        row.appendChild(actions);
+        listEl.appendChild(row);
+      });
+
+      const totalOT = entries.reduce((sum, e) => sum + e.overtime, 0);
+      totalOvertimeEl.textContent = `Total Overtime: ${totalOT.toFixed(2)} hrs`;
+    }
+
+    function formatDateForInput(dateString) {
+      const [month, day, year] = new Date(dateString).toLocaleDateString().split('/');
+      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+
+    function convertTimeToInput(timeStr) {
+      const [h, m] = timeStr.split(':');
+      return `${h.padStart(2, '0')}:${m}`;
+    }
+
+    // Button Logic
+    document.getElementById('timeInBtn').onclick = () => {
+      if (currentTimeIn) return alert('You already timed in!');
+      currentTimeIn = new Date();
+      alert(`✅ Time In recorded: ${formatTime(currentTimeIn)}`);
+    };
+
+    document.getElementById('timeOutBtn').onclick = () => {
+      if (!currentTimeIn) return alert('Please Time In first!');
+      currentTimeOut = new Date();
+      alert(`🕒 Time Out recorded: ${formatTime(currentTimeOut)}`);
+    };
+
+    document.getElementById('submitBtn').onclick = () => {
+      if (!currentTimeIn || !currentTimeOut) return alert('Please Time In and Time Out first.');
+
+      const totalHours = calculateHours(currentTimeIn, currentTimeOut);
+      const overtime = calculateOvertime(totalHours);
+      let reason = '';
+      if (overtime > 0) reason = prompt('Enter reason for overtime:') || '';
+
+      const now = new Date();
+      entries.push({
+        date: now.toLocaleDateString(),
+        rawDate: now.toISOString().split('T')[0],
+        day: now.toLocaleDateString(undefined, { weekday: 'long' }),
+        timeIn: formatTime(currentTimeIn),
+        timeOut: formatTime(currentTimeOut),
+        totalHours,
+        overtime,
+        reason
+      });
+
+      currentTimeIn = null;
+      currentTimeOut = null;
+      save();
+    };
+
+    render();
+  </script>
+</body>
+</html>
