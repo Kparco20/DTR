@@ -22,6 +22,8 @@ export default function FaceScanner({
   const [error, setError] = useState<string>('');
   const [capturing, setCapturing] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
+  const [cameraConfirmed, setCameraConfirmed] = useState(false);
+  const [showCameraCheck, setShowCameraCheck] = useState(false);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -30,6 +32,7 @@ export default function FaceScanner({
       try {
         setStatus('initializing');
         setError('');
+        setShowCameraCheck(true);
 
         // Request camera access
         stream = await navigator.mediaDevices.getUserMedia({
@@ -42,22 +45,47 @@ export default function FaceScanner({
 
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+
+          // Verify camera is actually streaming
+          const checkCameraStream = () => {
+            if (
+              videoRef.current &&
+              videoRef.current.srcObject &&
+              (videoRef.current.srcObject as MediaStream).getTracks().length > 0
+            ) {
+              const videoTrack = (videoRef.current.srcObject as MediaStream)
+                .getVideoTracks()[0];
+              if (videoTrack && videoTrack.readyState === 'live') {
+                console.log('✅ Camera is live and ready');
+                setCameraConfirmed(true);
+              }
+            }
+          };
+
           videoRef.current.onloadedmetadata = () => {
             videoRef.current?.play().catch(err => {
               console.error('Play error:', err);
-              setStatus('ready');
             });
-            setStatus('ready');
+            checkCameraStream();
           };
+
+          // Also check periodically
+          const checkInterval = setInterval(checkCameraStream, 500);
 
           // Timeout if video doesn't load
           const timeout = setTimeout(() => {
-            if (videoRef.current?.readyState === 0) {
+            clearInterval(checkInterval);
+            if (cameraConfirmed) {
+              setStatus('ready');
+            } else {
               setStatus('ready');
             }
-          }, 2000);
+          }, 3000);
 
-          return () => clearTimeout(timeout);
+          return () => {
+            clearInterval(checkInterval);
+            clearTimeout(timeout);
+          };
         }
       } catch (err) {
         console.error('Camera error:', err);
@@ -67,6 +95,7 @@ export default function FaceScanner({
             : 'Camera access denied. Please allow camera permissions.'
         );
         setStatus('error');
+        setShowCameraCheck(false);
       }
     };
 
@@ -77,7 +106,7 @@ export default function FaceScanner({
         stream.getTracks().forEach(track => track.stop());
       }
     };
-  }, []);
+  }, [cameraConfirmed]);
 
   const captureFace = async () => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -161,6 +190,28 @@ export default function FaceScanner({
               <div className="animate-spin rounded-full h-12 w-12 border-2 border-blue-500 border-t-transparent"></div>
             </div>
             <p className="text-blue-300 text-sm text-center">Loading camera...</p>
+          </div>
+        )}
+
+        {showCameraCheck && status === 'initializing' && (
+          <div className="space-y-4">
+            <div className="bg-blue-500/20 border border-blue-500 rounded-lg p-4">
+              <p className="text-blue-200 text-sm">
+                {cameraConfirmed ? (
+                  <>
+                    <span className="font-semibold">✅ Camera is ready!</span>
+                    <br />
+                    Your camera has been verified and is ready to scan.
+                  </>
+                ) : (
+                  <>
+                    <span className="font-semibold">Checking camera...</span>
+                    <br />
+                    Verifying that your camera is working properly.
+                  </>
+                )}
+              </p>
+            </div>
           </div>
         )}
 
