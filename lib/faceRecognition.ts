@@ -90,30 +90,63 @@ export async function startCamera(videoElement: HTMLVideoElement) {
     videoElement.muted = true;
     videoElement.playsInline = true;
 
-    // Ensure video plays after metadata is loaded
+    // Wait for video metadata and dimensions to be available
     return new Promise<void>((resolve, reject) => {
+      let resolved = false;
+
+      const checkVideoDimensions = () => {
+        if (videoElement.videoWidth > 0 && videoElement.videoHeight > 0 && !resolved) {
+          resolved = true;
+          console.log(`Video ready: ${videoElement.videoWidth}x${videoElement.videoHeight}`);
+          resolve();
+        }
+      };
+
+      // Listen for loadedmetadata event
+      videoElement.addEventListener('loadedmetadata', checkVideoDimensions);
+      
+      // Also check on play event
+      videoElement.addEventListener('play', checkVideoDimensions);
+
+      // Try to play the video
       const playPromise = videoElement.play();
       
       if (playPromise !== undefined) {
         playPromise
           .then(() => {
-            console.log('Video playback started');
-            resolve();
+            console.log('Video playback started, checking dimensions...');
+            checkVideoDimensions();
           })
           .catch((err) => {
             console.error('Video playback failed:', err);
-            reject(new Error('Video playback failed: ' + err.message));
           });
-      } else {
-        // Fallback for older browsers
-        videoElement.onloadedmetadata = () => {
-          videoElement.play();
-          resolve();
-        };
       }
-      
+
+      // Fallback check every 100ms
+      const intervalId = setInterval(() => {
+        checkVideoDimensions();
+      }, 100);
+
       // Timeout if video doesn't start
-      setTimeout(() => reject(new Error('Camera timeout')), 5000);
+      const timeoutId = setTimeout(() => {
+        clearInterval(intervalId);
+        if (!resolved) {
+          resolved = true;
+          reject(new Error('Camera failed to load after 10 seconds'));
+        }
+      }, 10000);
+
+      // Cleanup on resolve
+      const cleanup = () => {
+        clearInterval(intervalId);
+        clearTimeout(timeoutId);
+        videoElement.removeEventListener('loadedmetadata', checkVideoDimensions);
+        videoElement.removeEventListener('play', checkVideoDimensions);
+      };
+
+      // Return cleanup function
+      (resolve as any).cleanup = cleanup;
+      (reject as any).cleanup = cleanup;
     });
   } catch (error) {
     console.error('Failed to access camera:', error);
