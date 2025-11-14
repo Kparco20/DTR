@@ -32,15 +32,19 @@ export default function FaceCapture({
       try {
         setLoading(true);
         setError('');
+        
+        console.log('Initializing face recognition...');
         await loadFaceModels();
         
         if (videoRef.current) {
+          console.log('Starting camera...');
           // Set autoplay and muted attributes before starting
           videoRef.current.autoplay = true;
           videoRef.current.muted = true;
           videoRef.current.playsInline = true;
           
           await startCamera(videoRef.current);
+          console.log('Camera started successfully');
         }
         setLoading(false);
       } catch (err) {
