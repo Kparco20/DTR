@@ -73,12 +73,34 @@ export async function startCamera(videoElement: HTMLVideoElement) {
     });
 
     videoElement.srcObject = stream;
+    videoElement.autoplay = true;
+    videoElement.muted = true;
+    videoElement.playsInline = true;
 
-    return new Promise<void>((resolve) => {
-      videoElement.onloadedmetadata = () => {
-        videoElement.play();
-        resolve();
-      };
+    // Ensure video plays after metadata is loaded
+    return new Promise<void>((resolve, reject) => {
+      const playPromise = videoElement.play();
+      
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log('Video playback started');
+            resolve();
+          })
+          .catch((err) => {
+            console.error('Video playback failed:', err);
+            reject(new Error('Video playback failed: ' + err.message));
+          });
+      } else {
+        // Fallback for older browsers
+        videoElement.onloadedmetadata = () => {
+          videoElement.play();
+          resolve();
+        };
+      }
+      
+      // Timeout if video doesn't start
+      setTimeout(() => reject(new Error('Camera timeout')), 5000);
     });
   } catch (error) {
     console.error('Failed to access camera:', error);

@@ -35,12 +35,18 @@ export default function FaceCapture({
         await loadFaceModels();
         
         if (videoRef.current) {
+          // Set autoplay and muted attributes before starting
+          videoRef.current.autoplay = true;
+          videoRef.current.muted = true;
+          videoRef.current.playsInline = true;
+          
           await startCamera(videoRef.current);
         }
         setLoading(false);
       } catch (err) {
+        console.error('Camera initialization error:', err);
         setError(
-          err instanceof Error ? err.message : 'Failed to initialize camera'
+          err instanceof Error ? err.message : 'Failed to initialize camera. Please check camera permissions.'
         );
         setLoading(false);
       }
@@ -133,8 +139,14 @@ export default function FaceCapture({
         <div className="relative mb-4">
           <video
             ref={videoRef}
-            className="w-full h-64 rounded-lg bg-black object-cover"
+            className="w-full h-64 rounded-lg bg-black object-cover object-center"
             playsInline
+            autoPlay
+            muted
+            style={{ 
+              display: 'block',
+              transform: 'scaleX(-1)',
+            }}
           />
           <canvas ref={canvasRef} className="hidden" />
 
