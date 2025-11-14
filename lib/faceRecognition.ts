@@ -12,15 +12,28 @@ export async function captureFaceDescriptor(
   videoElement: HTMLVideoElement
 ): Promise<Float32Array | null> {
   try {
+    // Ensure video has loaded and has dimensions
+    if (videoElement.videoWidth === 0 || videoElement.videoHeight === 0) {
+      throw new Error('Video stream not ready. Please wait a moment and try again.');
+    }
+
     const canvas = document.createElement('canvas');
     canvas.width = videoElement.videoWidth;
     canvas.height = videoElement.videoHeight;
+
+    if (canvas.width === 0 || canvas.height === 0) {
+      throw new Error('Invalid canvas dimensions');
+    }
 
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Could not get canvas context');
 
     ctx.drawImage(videoElement, 0, 0);
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    if (!imageData || imageData.data.length === 0) {
+      throw new Error('Failed to capture image data from video');
+    }
 
     // Create a simple hash/descriptor from pixel data
     // This is a simplified version - extracts pixel patterns

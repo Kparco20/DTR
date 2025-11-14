@@ -68,18 +68,25 @@ export default function FaceCapture({
       setCapturing(true);
       setError('');
 
+      // Verify video dimensions are ready
+      if (videoRef.current.videoWidth === 0 || videoRef.current.videoHeight === 0) {
+        setError('Camera is not ready yet. Please wait a moment and try again.');
+        setCapturing(false);
+        return;
+      }
+
       // Capture face descriptor
       const descriptor = await captureFaceDescriptor(videoRef.current);
 
       if (!descriptor) {
-        setError('Could not detect your face. Please try again.');
+        setError('Could not capture face data. Please try again.');
         setCapturing(false);
         return;
       }
 
       // Capture image from video
       const context = canvasRef.current.getContext('2d');
-      if (context && videoRef.current.videoWidth > 0) {
+      if (context && videoRef.current.videoWidth > 0 && videoRef.current.videoHeight > 0) {
         canvasRef.current.width = videoRef.current.videoWidth;
         canvasRef.current.height = videoRef.current.videoHeight;
         context.drawImage(videoRef.current, 0, 0);
@@ -96,9 +103,13 @@ export default function FaceCapture({
         setTimeout(() => {
           stopCamera(videoRef.current!);
         }, 2000);
+      } else {
+        setError('Failed to capture image. Please try again.');
+        setCapturing(false);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to capture face');
+      console.error('Capture error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to capture face. Please try again.');
       setCapturing(false);
     }
   };
