@@ -27,86 +27,131 @@ export default function FaceScanner({
 
   useEffect(() => {
     let stream: MediaStream | null = null;
+    let mounted = true;
 
     const startScanning = async () => {
       try {
+        if (!mounted) return;
+        
         setStatus('initializing');
         setError('');
         setShowCameraCheck(true);
 
-        // Request camera access
-        stream = await navigator.mediaDevices.getUserMedia({
+        console.log('📷 Requesting camera access...');
+
+        // Better mobile camera constraints
+        const constraints: MediaStreamConstraints = {
           video: {
             facingMode: 'user',
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
+            width: { ideal: 1280, min: 640 },
+            height: { ideal: 720, min: 480 },
           },
-        });
+          audio: false,
+        };
 
-        if (videoRef.current) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (err: any) {
+          // Fallback for older mobile browsers
+          console.log('Trying fallback camera constraints...');
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+        }
+
+        if (!mounted) return;
+
+        if (videoRef.current && stream) {
+          console.log('📹 Stream obtained, attaching to video element...');
+          
           videoRef.current.srcObject = stream;
+          videoRef.current.setAttribute('playsinline', 'true');
+          videoRef.current.setAttribute('webkit-playsinline', 'true');
+          videoRef.current.muted = true;
 
-          // Verify camera is actually streaming
-          const checkCameraStream = () => {
-            if (
-              videoRef.current &&
-              videoRef.current.srcObject &&
-              (videoRef.current.srcObject as MediaStream).getTracks().length > 0
-            ) {
-              const videoTrack = (videoRef.current.srcObject as MediaStream)
-                .getVideoTracks()[0];
-              if (videoTrack && videoTrack.readyState === 'live') {
-                console.log('✅ Camera is live and ready');
-                setCameraConfirmed(true);
+          let readyCheck = 0;
+          const readyInterval = setInterval(() => {
+            readyCheck++;
+            
+            if (videoRef.current && stream) {
+              const videoTrack = stream.getVideoTracks()[0];
+              
+              if (
+                videoTrack &&
+                videoTrack.readyState === 'live' &&
+                videoRef.current.readyState >= 2
+              ) {
+                console.log(
+                  `✅ Camera ready: ${videoRef.current.videoWidth}x${videoRef.current.videoHeight}`
+                );
+                clearInterval(readyInterval);
+                
+                if (mounted) {
+                  setCameraConfirmed(true);
+                  
+                  // Auto-play video
+                  videoRef.current.play().catch(err => {
+                    console.error('Auto-play failed:', err);
+                  });
+                  
+                  setStatus('ready');
+                }
+              } else if (readyCheck > 20) {
+                // Timeout after 2 seconds, set ready anyway
+                console.log('⚠️ Camera check timeout, proceeding anyway...');
+                clearInterval(readyInterval);
+                if (mounted) {
+                  setCameraConfirmed(true);
+                  setStatus('ready');
+                  
+                  videoRef.current?.play().catch(err => {
+                    console.error('Play error:', err);
+                  });
+                }
               }
             }
-          };
+          }, 100);
 
-          videoRef.current.onloadedmetadata = () => {
-            videoRef.current?.play().catch(err => {
-              console.error('Play error:', err);
-            });
-            checkCameraStream();
-          };
-
-          // Also check periodically
-          const checkInterval = setInterval(checkCameraStream, 500);
-
-          // Timeout if video doesn't load
-          const timeout = setTimeout(() => {
-            clearInterval(checkInterval);
-            if (cameraConfirmed) {
-              setStatus('ready');
-            } else {
-              setStatus('ready');
-            }
-          }, 3000);
-
-          return () => {
-            clearInterval(checkInterval);
-            clearTimeout(timeout);
-          };
+          return () => clearInterval(readyInterval);
         }
-      } catch (err) {
-        console.error('Camera error:', err);
-        setError(
-          err instanceof Error
-            ? err.message
-            : 'Camera access denied. Please allow camera permissions.'
-        );
+      } catch (err: any) {
+        console.error('❌ Camera error:', err);
+        
+        if (!mounted) return;
+        
+        let errorMsg = 'Camera access denied. Please allow camera permissions.';
+        
+        if (err.name === 'NotAllowedError') {
+          errorMsg = 'Camera permission denied. Please check your browser settings.';
+        } else if (err.name === 'NotFoundError') {
+          errorMsg = 'No camera found on this device.';
+        } else if (err.name === 'NotReadableError') {
+          errorMsg = 'Camera is in use by another application.';
+        } else if (err.message) {
+          errorMsg = err.message;
+        }
+        
+        setError(errorMsg);
         setStatus('error');
         setShowCameraCheck(false);
       }
     };
 
-    startScanning();
+    // Add a small delay to ensure DOM is ready
+    const startTimer = setTimeout(startScanning, 500);
 
     return () => {
+      mounted = false;
+      clearTimeout(startTimer);
       if (stream) {
-        stream.getTracks().forEach(track => track.stop());
+        stream.getTracks().forEach(track => {
+          console.log(`Stopping ${track.kind} track`);
+          track.stop();
+        });
       }
     };
-  }, [cameraConfirmed]);
+  }, []);
 
   const captureFace = async () => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -314,14 +359,25 @@ export default function FaceScanner({
         {status === 'error' && (
           <div className="space-y-4">
             <div className="bg-red-500/20 border border-red-500 rounded-lg p-4">
-              <p className="text-red-200 text-sm">{error}</p>
+              <p className="text-red-200 text-sm font-semibold mb-2">❌ Camera Error</p>
+              <p className="text-red-200 text-xs">{error}</p>
             </div>
-            <button
-              onClick={onCancel}
-              className="w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition-colors"
-            >
-              Go Back
-            </button>
+            <div className="space-y-2">
+              <button
+                onClick={() => {
+                  window.location.reload();
+                }}
+                className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+              >
+                Retry Camera
+              </button>
+              <button
+                onClick={onCancel}
+                className="w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition-colors"
+              >
+                Go Back
+              </button>
+            </div>
           </div>
         )}
 
